@@ -1,0 +1,18 @@
+{
+    "name": "Character.NPC",
+    "rootNamespace": "",
+    "references": [
+        "GUID:ed10566c970e30c47a928eb2751f0012",
+        "GUID:0b6a4af45cf12094f8354459e9254ec2",
+        "GUID:ea010e16241743f459a4b0bdec34280a"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

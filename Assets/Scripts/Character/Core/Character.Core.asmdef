@@ -1,0 +1,18 @@
+{
+    "name": "Character.Core",
+    "rootNamespace": "",
+    "references": [
+        "GUID:2a0c9ac58d61c75448a13ada5d435cb8",
+        "GUID:0b6a4af45cf12094f8354459e9254ec2",
+        "GUID:987a450d2401e0341a30ba471439b6fc"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
