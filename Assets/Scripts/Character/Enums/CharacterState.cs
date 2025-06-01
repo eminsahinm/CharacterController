@@ -1,4 +1,4 @@
-namespace Game.Character.Enums
+namespace Character.Core.Enums
 {
     public enum CharacterState
     {
@@ -10,6 +10,7 @@ namespace Game.Character.Enums
         Flying,
         Climbing,
         Attacking,
+        Stunned,
         Dead
     }
 }

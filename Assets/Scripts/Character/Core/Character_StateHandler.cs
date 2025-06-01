@@ -1,8 +1,8 @@
-using Game.Character.Enums;
+using Character.Core.Enums;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace Game.Character.Core
+namespace Character.Core.State
 {
     public class Character_StateHandler : MonoBehaviour
     {
