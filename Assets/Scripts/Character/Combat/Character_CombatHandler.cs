@@ -3,6 +3,7 @@ using Character.Core.State;
 using Character.Core.Stats;
 using Character.Core.Interfaces;
 using Character.Core.Enums;
+using UnityEngine.Events;
 
 namespace Character.Core.Combat
 {
@@ -36,6 +37,11 @@ namespace Character.Core.Combat
         public System.Action OnAttackStarted { get; set; }
         #endregion
 
+
+        #region Events
+        [Header("Attacking")]
+        public UnityEvent OnAttacking;
+        #endregion
         #region Unity Lifecycle
         private void Awake()
         {
@@ -78,12 +84,13 @@ namespace Character.Core.Combat
 
         public void Attack()
         {
-            if (!CanAttack()) return;
+            //if (!CanAttack()) return;
 
             _lastAttackTime = Time.time;
             _stateHandler.ChangeState(CharacterState.Attacking);
 
             OnAttackStarted?.Invoke();
+            OnAttacking?.Invoke();
 
             // Apply damage to target if it has ICombat
             if (_currentTarget != null)
@@ -91,7 +98,7 @@ namespace Character.Core.Combat
                 var targetCombat = _currentTarget.GetComponent<ICombat>();
                 if (targetCombat != null)
                 {
-                    float damage = _stats.GetAttackDamage(); // Assuming this method exists
+                    float damage = _stats.GetAttackDamage(); 
                     targetCombat.TakeDamage(damage, gameObject);
                 }
             }

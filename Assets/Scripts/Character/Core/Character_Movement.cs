@@ -1,6 +1,7 @@
 using UnityEngine;
 using Character.Core.Enums;
 using Character.Core.State;
+using UnityEngine.Events;
 
 namespace Character.Core.Base
 {
@@ -18,8 +19,17 @@ namespace Character.Core.Base
         [SerializeField] private float _jumpHeight = 2f;
         [SerializeField] private float _gravity = -9.81f;
 
+        [Header("Ground Detection")]
+        [SerializeField] private float _groundCheckDistance = 0.05f;
+        [SerializeField] private float _groundCheckRadius = 0.2f;
+        [SerializeField] private LayerMask _groundLayerMask = -1;
+        [SerializeField] private float _groundedBuffer = 0.1f; // Coyote time
+
+
         private Vector3 _velocity;
         private bool _isGrounded;
+        private bool _wasGroundedLastFrame;
+        private float _timeSinceGrounded;
         #endregion
 
         #region Properties
@@ -30,16 +40,36 @@ namespace Character.Core.Base
         public Vector3 Velocity => _velocity;
         #endregion
 
+        #region Events
+        [Header("Idle")]
+        public UnityEvent OnIdle;
+        [Header("Walking")]
+        public UnityEvent OnWalking;
+        [Header("Jumping")]
+        public UnityEvent OnJumping;
+        [Header("Running")]
+        public UnityEvent OnRunning;
+        [Header("Rolling")]
+        public UnityEvent OnRolling;
+        [Header("Flying")]
+        public UnityEvent OnFlying;
+        [Header("Climbing")]
+        public UnityEvent OnClimbing;
+        #endregion
         #region Unity Lifecycle
-        private void Awake()
+        public virtual void Awake()
         {
             InitializeComponents();
         }
 
-        private void Update()
+        public virtual void Update()
         {
             UpdateGroundedState();
             ApplyGravity();
+            
+            // Sadece gravity uygula, horizontal movement ayrı olsun
+            ApplyVerticalMovement();
+            
         }
         #endregion
 
@@ -48,7 +78,6 @@ namespace Character.Core.Base
         {
             _stateHandler = GetComponent<Character_StateHandler>();
             _characterController = GetComponent<CharacterController>();
-
             ValidateComponents();
         }
 
@@ -67,19 +96,37 @@ namespace Character.Core.Base
         {
             if (!CanMove()) return;
 
-            Vector3 moveVector = direction * CurrentSpeed;
-            _characterController.Move((moveVector + _velocity) * Time.deltaTime);
+            // Sadece horizontal movement uygula
+            Vector3 horizontalMovement = direction * CurrentSpeed * Time.deltaTime;
+            _characterController.Move(horizontalMovement);
+        }
+
+        private void ApplyVerticalMovement()
+        {
+            if (!CanMove()) return;
+
+            // Sadece vertical movement uygula
+            Vector3 verticalMovement = new Vector3(0, _velocity.y, 0) * Time.deltaTime;
+            _characterController.Move(verticalMovement);
         }
 
         public virtual void Walk(Vector3 direction = default)
         {
             if (!CanChangeMovementState()) return;
 
-            _stateHandler.ChangeState(CharacterState.Walking);
+            if(direction == Vector3.zero && _isGrounded)
+            {
+                _stateHandler.ChangeState(CharacterState.Idle);
+                OnIdle?.Invoke();
+            }
+            else if (_isGrounded)
+            {
+                _stateHandler.ChangeState(CharacterState.Walking);
+                OnWalking?.Invoke();
+            }
+            
             CurrentSpeed = _walkSpeed;
-
-            if (direction != Vector3.zero)
-                Move(direction);
+            Move(direction);
         }
 
         public virtual void Run(Vector3 direction = default)
@@ -90,7 +137,10 @@ namespace Character.Core.Base
             CurrentSpeed = _runSpeed;
 
             if (direction != Vector3.zero)
+            {
                 Move(direction);
+                OnRunning?.Invoke();
+            }
         }
 
         public virtual void Jump()
@@ -99,6 +149,7 @@ namespace Character.Core.Base
 
             _stateHandler.ChangeState(CharacterState.Jumping);
             _velocity.y = Mathf.Sqrt(_jumpHeight * -2f * _gravity);
+            OnJumping?.Invoke();
         }
 
         public virtual void Roll()
@@ -107,6 +158,7 @@ namespace Character.Core.Base
 
             _stateHandler.ChangeState(CharacterState.Rolling);
             // Add roll logic here
+            OnRolling?.Invoke();
         }
 
         public virtual void Fly()
@@ -115,6 +167,7 @@ namespace Character.Core.Base
 
             _stateHandler.ChangeState(CharacterState.Flying);
             // Add flying logic here
+            OnFlying?.Invoke();
         }
 
         public virtual void Climb()
@@ -123,6 +176,7 @@ namespace Character.Core.Base
 
             _stateHandler.ChangeState(CharacterState.Climbing);
             // Add climbing logic here
+            OnClimbing?.Invoke();
         }
 
         public virtual void Stop()
@@ -151,25 +205,78 @@ namespace Character.Core.Base
 
         private bool CanJump()
         {
-            return CanChangeMovementState() && _isGrounded;
+            // Coyote time: Kısa süre önce yerdeyse atlayabilir
+            return CanChangeMovementState() && (_isGrounded || _timeSinceGrounded <= _groundedBuffer);
         }
         #endregion
 
         #region Physics
         private void UpdateGroundedState()
         {
-            _isGrounded = _characterController.isGrounded;
+            _wasGroundedLastFrame = _isGrounded;
+            
+            // Önce CharacterController'ın ground detection'ını kontrol et
+            // Jump sırasında yukarı hareket ediyorken ground'u ignore et
+            bool controllerGrounded = _characterController.isGrounded && _velocity.y <= 0.1f;
+            
+            // Sphere cast ile double check (sadece aşağı düşerken)
+            bool spherecastGrounded = false;
+            if (_velocity.y <= 0.1f) // Sadece düşerken sphere cast yap
+            {
+                spherecastGrounded = CheckGroundWithSphereCast();
+            }
+            
+            _isGrounded = controllerGrounded || spherecastGrounded;
+            
+            // Jump başlangıcında bir frame ground'u false yap
+            if (_velocity.y > 2f) // Jump threshold
+            {
+                _isGrounded = false;
+            }
+            
+            // Coyote time tracking
+            if (_isGrounded)
+            {
+                _timeSinceGrounded = 0f;
+            }
+            else
+            {
+                _timeSinceGrounded += Time.deltaTime;
+            }
+        }
+
+        private bool CheckGroundWithSphereCast()
+        {
+            Vector3 spherePosition = transform.position + Vector3.up * (_characterController.radius + _groundCheckDistance);
+            
+            return Physics.SphereCast(
+                spherePosition,
+                _groundCheckRadius,
+                Vector3.down,
+                out RaycastHit hit,
+                _groundCheckDistance + _characterController.radius,
+                _groundLayerMask
+            );
         }
 
         private void ApplyGravity()
         {
-            if (_isGrounded && _velocity.y < 0)
+            if (_isGrounded)
             {
-                _velocity.y = -2f;
+                // Yerdeyken ve aşağı düşüyorken velocity'yi sıfırla
+                if (_velocity.y < 0)
+                {
+                    _velocity.y = -0.5f; // Slope'larda kaymaması için
+                }
+                // Yukarı hareket ediyorken (zıplama) dokunma
             }
             else
             {
+                // Havadayken gravity uygula
                 _velocity.y += _gravity * Time.deltaTime;
+                
+                // Terminal velocity sınırı
+                _velocity.y = Mathf.Max(_velocity.y, _gravity * 2f);
             }
         }
         #endregion
@@ -179,6 +286,16 @@ namespace Character.Core.Base
         {
             if (_characterController != null)
             {
+                // Ground check sphere
+                Vector3 spherePosition = transform.position + Vector3.up * (_characterController.radius + _groundCheckDistance);
+                Gizmos.color = _isGrounded ? Color.green : Color.red;
+                Gizmos.DrawWireSphere(spherePosition, _groundCheckRadius);
+                
+                // Ground check ray
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawLine(spherePosition, spherePosition + Vector3.down * (_groundCheckDistance + _characterController.radius));
+                
+                // Character position indicator
                 Gizmos.color = _isGrounded ? Color.green : Color.red;
                 Gizmos.DrawWireSphere(transform.position, 0.1f);
             }

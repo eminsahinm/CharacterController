@@ -2,7 +2,9 @@
     "name": "Character.Player",
     "rootNamespace": "",
     "references": [
-        "GUID:005576fa7c1b14341a638091eca62adc"
+        "GUID:005576fa7c1b14341a638091eca62adc",
+        "GUID:29f274f51c8508a4e869445025ea928b",
+        "GUID:75469ad4d38634e559750d17036d5f7c"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
