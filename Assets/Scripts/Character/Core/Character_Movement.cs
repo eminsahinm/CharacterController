@@ -12,12 +12,14 @@ namespace Character.Core.Base
         #region Private Fields
         private Character_StateHandler _stateHandler;
         private CharacterController _characterController;
+        private Camera _mainCamera;
 
         [Header("Movement Settings")]
         [SerializeField] private float _walkSpeed = 3f;
         [SerializeField] private float _runSpeed = 6f;
         [SerializeField] private float _jumpHeight = 2f;
         [SerializeField] private float _gravity = -9.81f;
+        [SerializeField] private float _turnSpeed = 10f; // Degrees per second
 
         [Header("Ground Detection")]
         [SerializeField] private float _groundCheckDistance = 0.05f;
@@ -78,6 +80,7 @@ namespace Character.Core.Base
         {
             _stateHandler = GetComponent<Character_StateHandler>();
             _characterController = GetComponent<CharacterController>();
+            _mainCamera = Camera.main;
             ValidateComponents();
         }
 
@@ -88,6 +91,9 @@ namespace Character.Core.Base
 
             if (_characterController == null)
                 Debug.LogError($"CharacterController not found on {gameObject.name}");
+            
+            if (_mainCamera == null)
+                Debug.LogError($"Main Camera not found in scene");
         }
         #endregion
 
@@ -96,8 +102,30 @@ namespace Character.Core.Base
         {
             if (!CanMove()) return;
 
-            // Sadece horizontal movement uygula
-            Vector3 horizontalMovement = direction * CurrentSpeed * Time.deltaTime;
+            // Convert input direction to camera-relative direction
+            Vector3 cameraForward = _mainCamera.transform.forward;
+            Vector3 cameraRight = _mainCamera.transform.right;
+            
+            // Project camera vectors onto horizontal plane
+            cameraForward.y = 0;
+            cameraRight.y = 0;
+            cameraForward.Normalize();
+            cameraRight.Normalize();
+
+            // Calculate camera-relative movement direction
+            Vector3 moveDirection = cameraForward * direction.z + cameraRight * direction.x;
+            moveDirection.y = 0;
+            moveDirection.Normalize();
+
+            // Handle rotation if we have a direction
+            if (moveDirection != Vector3.zero)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, _turnSpeed * Time.deltaTime);
+            }
+
+            // Apply horizontal movement
+            Vector3 horizontalMovement = moveDirection * CurrentSpeed * Time.deltaTime;
             _characterController.Move(horizontalMovement);
         }
 
@@ -119,12 +147,16 @@ namespace Character.Core.Base
                 _stateHandler.ChangeState(CharacterState.Idle);
                 OnIdle?.Invoke();
             }
-            else if (_isGrounded)
+            else
             {
                 _stateHandler.ChangeState(CharacterState.Walking);
+            }
+
+            if (direction != Vector3.zero && _isGrounded)
+            {
                 OnWalking?.Invoke();
             }
-            
+
             CurrentSpeed = _walkSpeed;
             Move(direction);
         }
@@ -139,8 +171,18 @@ namespace Character.Core.Base
             if (direction != Vector3.zero)
             {
                 Move(direction);
+            }
+            if (direction == Vector3.zero && _isGrounded)
+            {
+                _stateHandler.ChangeState(CharacterState.Idle);
+                OnIdle?.Invoke();
+            }
+
+            if (direction != Vector3.zero && _isGrounded)
+            {
                 OnRunning?.Invoke();
             }
+
         }
 
         public virtual void Jump()
